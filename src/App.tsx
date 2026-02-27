@@ -10,6 +10,8 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function App() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [platform, setPlatform] = useState<'ios' | 'android' | 'other'>('other');
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
 
   useEffect(() => {
     const userAgent = window.navigator.userAgent.toLowerCase();
@@ -18,11 +20,39 @@ export default function App() {
     } else if (/android/.test(userAgent)) {
       setPlatform('android');
     }
+
+    const handler = (e: any) => {
+      // Prevent Chrome 67 and earlier from automatically showing the prompt
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const handleCreateShortcut = () => {
-    // Redirect to the target URL
-    window.location.href = 'https://jornadacristaapp.vercel.app/';
+  const handleCreateShortcut = async () => {
+    if (deferredPrompt) {
+      // Show the install prompt
+      deferredPrompt.prompt();
+      // Wait for the user to respond to the prompt
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`User response to the install prompt: ${outcome}`);
+      // We've used the prompt, and can't use it again, throw it away
+      setDeferredPrompt(null);
+      setIsInstallable(false);
+      
+      // After a short delay to allow the install to start/finish, redirect
+      setTimeout(() => {
+        window.location.href = 'https://jornadacristaapp.vercel.app/';
+      }, 1000);
+    } else {
+      // Fallback: just redirect to the target URL
+      window.location.href = 'https://jornadacristaapp.vercel.app/';
+    }
   };
 
   return (
@@ -40,7 +70,9 @@ export default function App() {
 
         <h1 className="text-2xl font-semibold mb-2 tracking-tight">Jornada Cristã</h1>
         <p className="text-[#5A5A40] mb-8 text-sm font-medium">
-          Crie um atalho na sua tela inicial para acessar rapidamente.
+          {isInstallable 
+            ? "Clique abaixo para instalar o atalho oficial na sua tela inicial."
+            : "Crie um atalho na sua tela inicial para acessar rapidamente."}
         </p>
 
         <button
@@ -48,7 +80,7 @@ export default function App() {
           onClick={handleCreateShortcut}
           className="w-full bg-[#5A5A40] hover:bg-[#4a4a35] text-white font-semibold py-4 px-6 rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-md"
         >
-          Criar atalho de aplicativo
+          {isInstallable ? "Instalar Atalho Agora" : "Criar atalho de aplicativo"}
           <ArrowRight className="w-5 h-5" />
         </button>
 
